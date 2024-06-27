@@ -1,0 +1,171 @@
+version: '3.8'
+services:
+  redis-master:
+    image: redis:latest
+    container_name: redis-master
+    ports:
+      - '6380:6379'
+    networks:
+      - redis-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.7'
+          memory: 1GB
+
+  redis-slave1:
+    image: redis:latest
+    container_name: redis-slave1
+    command: redis-server --slaveof redis-master 6379
+    ports:
+      - '6381:6379'
+    networks:
+      - redis-net
+    depends_on:
+      - redis-master
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  redis-slave2:
+    image: redis:latest
+    container_name: redis-slave2
+    command: redis-server --slaveof redis-master 6379
+    ports:
+      - '6382:6379'
+    networks:
+      - redis-net
+    depends_on:
+      - redis-master
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  redis-sentinel:
+    build:
+      context: ./sentinel
+    container_name: redis-sentinel1
+    ports:
+      - '26379:26379'
+    networks:
+      - redis-net
+    environment:
+      - SENTINEL_QUORUM=1
+      - SENTINEL_DOWN_AFTER=5000
+      - SENTINEL_FAILOVER=10000
+    depends_on:
+      - redis-master
+      - redis-slave1
+      - redis-slave2
+
+  redis-sentinel2:
+    build:
+      context: ./sentinel
+    container_name: redis-sentinel2
+    ports:
+      - '26380:26379'
+    networks:
+      - redis-net
+    environment:
+      - SENTINEL_QUORUM=1
+      - SENTINEL_DOWN_AFTER=5000
+      - SENTINEL_FAILOVER=10000
+    depends_on:
+      - redis-master
+      - redis-slave1
+      - redis-slave2
+
+  redis-sentinel3:
+    build:
+      context: ./sentinel
+    container_name: redis-sentinel3
+    ports:
+      - '26381:26379'
+    networks:
+      - redis-net
+    environment:
+      - SENTINEL_QUORUM=2
+      - SENTINEL_DOWN_AFTER=5000
+      - SENTINEL_FAILOVER=10000
+    depends_on:
+      - redis-master
+      - redis-slave1
+      - redis-slave2
+
+  haproxy:
+    image: haproxy:latest
+    container_name: haproxy
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+    ports:
+      - '6383:6379'
+    networks:
+      - redis-net
+    depends_on:
+      - redis-master
+      - redis-slave1
+      - redis-slave2
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.21.0
+    container_name: redis-exporter
+    platform: 'linux/amd64'
+    ports:
+      - '9121:9121'
+    command: ['--redis.addr=haproxy:6379']
+    depends_on:
+      - haproxy
+    networks:
+      - redis-net
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - redis-exporter
+    networks:
+      - redis-net
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - '3000:3000'
+    networks:
+      - redis-net
+    depends_on:
+      - prometheus
+
+  publisher:
+    build:
+      context: ./internal/publisher
+      dockerfile: Dockerfile
+    ports:
+      - 4001:3001
+    depends_on:
+      - redis-master
+    networks:
+      - redis-net
+
+  subscriber:
+    build:
+      context: ./internal/subscriber
+      dockerfile: Dockerfile
+    ports:
+      - 4002:3002
+    depends_on:
+      - redis-master
+    networks:
+      - redis-net
+
+networks:
+  redis-net:
+    driver: bridge
