@@ -1,0 +1,29 @@
+[
+    {
+        "targets": [
+            "redis-master:9121"
+        ],
+        "labels": {
+            "job": "redis_exporter_targets",
+            "instance": "redis-master"
+        }
+    },
+    {
+        "targets": [
+            "redis-slave1:9121"
+        ],
+        "labels": {
+            "job": "redis_exporter_targets",
+            "instance": "redis-slave1"
+        }
+    },
+    {
+        "targets": [
+            "redis-slave2:9121"
+        ],
+        "labels": {
+            "job": "redis_exporter_targets",
+            "instance": "redis-slave2"
+        }
+    }
+]
